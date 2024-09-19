@@ -15,3 +15,5 @@
 Ваша задача – посчитать и вывести количество английских слов, которые можно набрать, используя только смежные клавиши на QWERTY-клавиатуре.
 
 ![image](https://github.com/user-attachments/assets/30b5b511-1b44-4312-b8fd-56aa7b8126d0)
+
+Для сборки необходимо make all, для очистки make clean, для запуска ./build/aqparser -f <text_file_name>
