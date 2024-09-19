@@ -3,24 +3,22 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdbool.h>
+
 #include "log.h"
 #include "adjacent.h"
 
+#define QWERTY_ROWS 5
+#define QWERTY_COLS 22
 
-struct cords
-{
-  int x;
-  int y;
-};
+#define NUMBER_LETTERS 26
+#define CHECK_ZERO(D) (((D) == 0) ? 0 : 1)
+#define LETTER_SHIFT(D) (1 << (D))
+#define LETTER1 'a'
+/* a b c d e f g h i j k  l  m  n  o  p  q  r  s  t  u  v  w  x  y  z
+   0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+*/
 
-static const char qwerty_table[QWERTY_ROWS][QWERTY_COLS] = {
-  { 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p' },
-  { 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ' ' },
-  { 'z', 'x', 'c', 'v', 'b', 'n', 'm', ' ', ' ', ' ' }
-};
-
-char keyboard[QWERTY_ROWS][QWERTY_COLS] = {
+static const char keyboard[QWERTY_ROWS][QWERTY_COLS] = {
 {0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0  ,0 },
 {0  ,'q','q','w','w','e','e','r','r','t','t','y','y','u','u','i','i','o','o','p','p',0 },
 {0  ,0  ,'a','a','s','s','d','d','f','f','g','g','h','h','j','j','k','k','l','l',0  ,0 },
@@ -35,78 +33,38 @@ static bool is_latin_letter(const char ch)
   return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
 }
 
-static int get_kb_cords(const char ch, struct cords *kb_cords)
+static bool is_adjacent_chars(const char ch1, const char ch2)
 {
-  int i;
-  int j;
-  char lower_ch;
+  char lower_ch1;
+  char lower_ch2;
 
-  if (!is_latin_letter(ch)) {
-    return EINVAL;
+  if (!is_latin_letter(ch1)) {
+#ifdef LOG
+    print_err("illegal char: %c (%s)", ch1, strerror(EINVAL));
+#endif
+    return false;
+  }
+  
+  if (!is_latin_letter(ch2)) {
+#ifdef LOG
+    print_err("illegal char: %c (%s)", ch2, strerror(EINVAL));
+#endif
+    return false;
   }
 
-  lower_ch = tolower(ch);
+  lower_ch1 = tolower(ch1);
+  lower_ch2 = tolower(ch2);
 
-  for (i = 0; i < QWERTY_ROWS; i++) {
-    for (j = 0; j < QWERTY_COLS; j++) {
-      if (qwerty_table[i][j] == lower_ch) {
-        kb_cords->x = j;
-        kb_cords->y = i;
-        return 0;
-      }
-    }
-  }
-
-  return ERANGE;
+  return (!(map[lower_ch1 - LETTER1] & LETTER_SHIFT(lower_ch2 - LETTER1) ) == 0);
 }
 
-static unsigned char is_adjacent_qwerty_buttons(struct cords kb1, struct cords kb2)
-{
-  if (abs(kb1.y - kb2.y) > 1) {
-    return 0;
-  }
-
-  if (kb1.y == kb2.y) {
-    return abs(kb1.x - kb2.x) == 1;
-  }
-
-  if (abs(kb1.x - kb2.x) < 2) {
-    return (kb1.x == kb2.x) || 
-           (kb1.x > kb2.x && kb1.y < kb2.y) ||
-           (kb1.x < kb2.x && kb1.y > kb2.y);
-  }
-
-  return 0;
-}
-
-unsigned char is_adjacent_chars(const char ch1, const char ch2)
-{
-  struct cords kb1_cords;
-  struct cords kb2_cords;
-  int result;
-
-  result = get_kb_cords(ch1, &kb1_cords);
-  if (result != 0) {
-    print_err("illegal char: %c (%s)", ch1, strerror(result));
-    return 0;
-  }
-
-  result = get_kb_cords(ch2, &kb2_cords);
-  if (result != 0) {
-    print_err("illegal char: %c (%s)", ch2, strerror(result));
-    return 0;
-  }
-
-  return is_adjacent_qwerty_buttons(kb1_cords, kb2_cords);
-}
-
-unsigned char is_word_correct(const char *word)
+bool is_word_correct(const char *word)
 {
   const char *p;
 
   
   if (word[1] == '\000') {
-    return 1;
+    return true;
   }
 
   for (p = word; *(p + 1) != '\000'; p++) {
@@ -115,24 +73,24 @@ unsigned char is_word_correct(const char *word)
     }
 
     if (!is_adjacent_chars(*p, *(p + 1))) {
-      return 0;
+      return false;
     }
   }
 
-  return 1;
+  return true;
 }
 
 int initialize_maps(void) {
 
   for (int i = 0; i < NUMBER_LETTERS; i++){ //cycle at every english letter
-    for(int j = 0;j < QWERTY_ROWS*QWERTY_COLS - 1 ; j++){ // cycle at
+    for(int j = 0;j < QWERTY_ROWS*QWERTY_COLS - 1 ; j++){ // cycle at the whole keyboard symbols
       int x = j/QWERTY_COLS;
       int y = j%QWERTY_COLS;
       if ((LETTER1 + i) == keyboard[x][y]){
 
         /*x,y;x,y-1;x,y+2;x-1,y;x-1,y+1;x+1,y;x+1,y+1 exact button + adjacent buttons*/
-        map[i] = CHECK_ZERO(keyboard[x][y]) * LETTER_SHIFT(keyboard[x][y]-LETTER1) +
-        CHECK_ZERO(keyboard[x][y-1]) * LETTER_SHIFT(keyboard[x][y-1]-LETTER1) +
+        //map[i] = CHECK_ZERO(keyboard[x][y]) * LETTER_SHIFT(keyboard[x][y]-LETTER1) +
+        map[i] = CHECK_ZERO(keyboard[x][y-1]) * LETTER_SHIFT(keyboard[x][y-1]-LETTER1) +
         CHECK_ZERO(keyboard[x][y+2]) * LETTER_SHIFT(keyboard[x][y+2]-LETTER1) +
         CHECK_ZERO(keyboard[x-1][y]) * LETTER_SHIFT(keyboard[x-1][y]-LETTER1) +
         CHECK_ZERO(keyboard[x-1][y+1]) * LETTER_SHIFT(keyboard[x-1][y+1]-LETTER1) +

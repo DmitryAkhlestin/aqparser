@@ -7,8 +7,6 @@
 #include "adjacent.h"
 #include "log.h"
 
-extern int map[NUMBER_LETTERS];
-
 static void help(void)
 {
   print_out(
@@ -27,7 +25,7 @@ static int aq_parser(const char *pathname)
   size_t buffer_len;
   ssize_t rb;
   char *line;
-  int passed_lines;
+  int passed_words;
 
   if (pathname == NULL) {
     return EINVAL;
@@ -39,10 +37,11 @@ static int aq_parser(const char *pathname)
   }
 
   line = NULL;
-  //buffer_len = 0;
-  passed_lines = 0;
+  buffer_len = 0;
+  passed_words = 0;
 
   while ((rb = getline(&line, &buffer_len, fp)) != EOF) {
+
     if (line[rb - 1] == '\n') {
       line[rb - 1] = '\000';
     }
@@ -52,11 +51,16 @@ static int aq_parser(const char *pathname)
       continue;
 
     if (is_word_correct(line)) {
-      ++passed_lines;
+      ++passed_words;
+#ifdef LOG
       print_out("passed: %s", line);
+      
     } else {
       print_out("not passed: %s", line);
     }
+#else
+    }
+#endif    
   }
 
   fclose(fp);
@@ -64,12 +68,16 @@ static int aq_parser(const char *pathname)
   if (line != NULL) {
     free(line);
   }
+#ifdef LOG
+  if (passed_words > 0) {
 
-  if (passed_lines > 0) {
-    print_out("Passed number: %d", passed_lines);
+    print_out("Passed number: %d", passed_words);
   } else {
     print_out("All words are not passed");
   }
+#else
+  print_out("%d", passed_words);
+#endif
 
   return 0;
 }
@@ -100,7 +108,7 @@ int main(int argc, char **argv)
     print_err("Option -f is required. Use -h to get help");
     return 0;
   }
-  result = initialize_maps();
+  initialize_maps();
   result = aq_parser(pathname);
   if (result != 0) {
     print_err("%s", strerror(result));
